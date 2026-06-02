@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toki Pona Dictionary</title>
+<style>
+  :root {
+    --bg: #f7f5ee;
+    --fg: #1c1c1c;
+    --muted: #666;
+    --card: #fff;
+    --accent: #1e6f5c;
+    --border: #d9d4c0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1d1a;
+      --fg: #ece8d8;
+      --muted: #999;
+      --card: #25261f;
+      --accent: #6fcca0;
+      --border: #3a3c33;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--fg);
+    line-height: 1.4;
+  }
+  header {
+    position: sticky; top: 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px 10px;
+    z-index: 10;
+  }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  h1 { font-size: 18px; margin: 0 8px 0 0; font-weight: 600; }
+  h1 small { color: var(--muted); font-weight: 400; font-size: 13px; margin-left: 6px; }
+  input[type=search] {
+    flex: 1 1 240px;
+    font-size: 18px; padding: 8px 12px;
+    background: var(--card); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 6px;
+    min-width: 0;
+  }
+  input[type=search]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .controls { display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+              font-size: 14px; color: var(--muted); margin-top: 6px; }
+  .controls label { cursor: pointer; }
+  .controls input { vertical-align: middle; margin-right: 4px; }
+  #stats { color: var(--muted); font-size: 13px; margin-left: auto; }
+  main { padding: 12px 16px 60px; max-width: 880px; margin: 0 auto; }
+  .entry {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .head { display: flex; gap: 10px; align-items: baseline; }
+  .word { font-weight: 600; font-size: 17px; color: var(--accent); }
+  .dir { font-size: 11px; color: var(--muted); text-transform: uppercase;
+         letter-spacing: 0.04em; padding: 1px 5px; border: 1px solid var(--border);
+         border-radius: 3px; }
+  .translations { margin-top: 4px; }
+  .trans { display: inline-block; margin-right: 10px; }
+  .trans .t { }
+  .trans .pos { font-style: italic; color: var(--muted); font-size: 12px; margin-right: 4px; }
+  .trans .score { font-size: 11px; color: var(--muted); vertical-align: super;
+                  margin-left: 1px; }
+  .trans.more { opacity: 0.78; }
+  .pos-group { margin-top: 2px; }
+  .pos-group .pos-label { font-style: italic; color: var(--muted); font-size: 12px;
+                          margin-right: 6px; }
+  .more-section { margin-top: 4px; padding-top: 4px;
+                  border-top: 1px dashed var(--border); }
+  .more-section::before { content: "more: "; color: var(--muted); font-size: 12px;
+                          font-style: italic; margin-right: 4px; }
+  .loading, .empty { padding: 30px 16px; text-align: center; color: var(--muted); }
+  .source { font-size: 12px; color: var(--muted); margin-top: 20px; text-align: center; }
+  mark { background: rgba(255, 220, 60, 0.45); color: inherit; padding: 0 1px;
+         border-radius: 2px; }
+  @media (prefers-color-scheme: dark) {
+    mark { background: rgba(255, 200, 60, 0.32); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>Toki Pona <small>dictionary</small></h1>
+    <input id="q" type="search" placeholder="Search either direction (e.g. water, telo, pona)…"
+           autocomplete="off" autofocus>
+  </div>
+  <div class="controls">
+    <label><input type="radio" name="dir" value="both" checked> Both</label>
+    <label><input type="radio" name="dir" value="en"> English → Toki Pona</label>
+    <label><input type="radio" name="dir" value="tp"> Toki Pona → English</label>
+    <label><input type="checkbox" id="trans-search" checked> Also search translations</label>
+    <span id="stats">loading…</span>
+  </div>
+</header>
+<main>
+  <div id="results" class="loading">Loading dictionary…</div>
+  <div class="source" id="source"></div>
+</main>
+<script>
+(async function() {
+  const $ = (s) => document.querySelector(s);
+  const resultsEl = $('#results');
+  const stats = $('#stats');
+  const qInput = $('#q');
+  const dirInputs = document.querySelectorAll('input[name=dir]');
+  const transSearch = $('#trans-search');
+
+  let DATA = null;
+  try {
+    const res = await fetch('dictionary.json');
+    DATA = await res.json();
+  } catch (e) {
+    resultsEl.textContent = 'Failed to load dictionary.json: ' + e.message;
+    return;
+  }
+  $('#source').textContent = DATA.source;
+  stats.textContent = DATA.english_to_toki_pona.length + ' EN entries · '
+                    + DATA.toki_pona_to_english.length + ' TP entries';
+
+  // Pre-compute lowercase versions for fast filtering.
+  const enEntries = DATA.english_to_toki_pona.map(e => ({
+    dir: 'en', head: e.english, headLow: e.english.toLowerCase(),
+    translations: e.translations,
+    transText: e.translations.map(t => t.toki_pona).join(' ').toLowerCase(),
+  }));
+  const tpEntries = DATA.toki_pona_to_english.map(e => ({
+    dir: 'tp', head: e.toki_pona, headLow: e.toki_pona.toLowerCase(),
+    translations: e.translations,
+    transText: e.translations.map(t => t.english).join(' ').toLowerCase(),
+  }));
+
+  const escapeHTML = (s) => s.replace(/[&<>"]/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const highlight = (text, q) => {
+    if (!q) return escapeHTML(text);
+    const escaped = escapeHTML(text);
+    const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'ig');
+    return escaped.replace(re, '<mark>$1</mark>');
+  };
+  const fmtScore = (s) => s === 0.5 ? '½' : String(s);
+
+  function score(headLow, transText, q) {
+    if (!q) return 1;
+    if (headLow === q) return 1000;
+    if (headLow.startsWith(q + ' ')) return 700;
+    if (headLow.startsWith(q)) return 500;
+    const pos = headLow.indexOf(q);
+    if (pos >= 0) return 250 - pos;
+    if (transSearch.checked) {
+      // Word boundary match in translations.
+      const wb = new RegExp('\\b' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      if (wb.test(transText)) return 50;
+      if (transText.includes(q)) return 20;
+    }
+    return 0;
+  }
+
+  function renderEnEntry(e, q) {
+    const trans = e.translations.map(t =>
+      `<span class="trans"><span class="t">${highlight(t.toki_pona, q)}</span>` +
+      `<span class="score">${fmtScore(t.score)}</span></span>`
+    ).join(' ');
+    return `<div class="entry">
+      <div class="head"><span class="word">${highlight(e.head, q)}</span>
+        <span class="dir">en → tp</span></div>
+      <div class="translations">${trans}</div>
+    </div>`;
+  }
+
+  function renderTpEntry(e, q) {
+    // Group translations by (pos, more).
+    const groups = [];
+    let curKey = null, curList = null;
+    for (const t of e.translations) {
+      const key = (t.more ? 'more|' : 'main|') + (t.pos || '');
+      if (key !== curKey) {
+        curList = [];
+        groups.push({ pos: t.pos, more: !!t.more, items: curList });
+        curKey = key;
+      }
+      curList.push(t);
+    }
+    const main = groups.filter(g => !g.more);
+    const more = groups.filter(g => g.more);
+    const renderGroup = (g) => {
+      const items = g.items.map(t =>
+        `<span class="trans"><span class="t">${highlight(t.english, q)}</span>` +
+        `<span class="score">${fmtScore(t.score)}</span></span>`
+      ).join(' ');
+      const label = g.pos ? `<span class="pos-label">${escapeHTML(g.pos)}</span>` : '';
+      return `<div class="pos-group">${label}${items}</div>`;
+    };
+    let html = `<div class="entry">
+      <div class="head"><span class="word">${highlight(e.head, q)}</span>
+        <span class="dir">tp → en</span></div>
+      <div class="translations">${main.map(renderGroup).join('')}`;
+    if (more.length) {
+      html += `<div class="more-section">${more.map(renderGroup).join('')}</div>`;
+    }
+    html += `</div></div>`;
+    return html;
+  }
+
+  const LIMIT = 200;
+  function render() {
+    const q = qInput.value.trim().toLowerCase();
+    const dir = document.querySelector('input[name=dir]:checked').value;
+    const pools = [];
+    if (dir === 'both' || dir === 'en') pools.push(enEntries);
+    if (dir === 'both' || dir === 'tp') pools.push(tpEntries);
+
+    let matches = [];
+    for (const pool of pools) {
+      for (const e of pool) {
+        const s = score(e.headLow, e.transText, q);
+        if (s > 0) matches.push([s, e]);
+      }
+    }
+    matches.sort((a, b) => b[0] - a[0] || (a[1].head < b[1].head ? -1 : 1));
+    const total = matches.length;
+    const shown = matches.slice(0, LIMIT);
+    if (total === 0) {
+      resultsEl.className = 'empty';
+      resultsEl.textContent = q ? `No matches for "${q}".` : 'Type to search.';
+      return;
+    }
+    resultsEl.className = '';
+    const html = shown.map(([_, e]) =>
+      e.dir === 'en' ? renderEnEntry(e, q) : renderTpEntry(e, q)
+    ).join('');
+    const footer = total > shown.length
+      ? `<div class="loading">Showing first ${shown.length} of ${total} matches.</div>`
+      : '';
+    resultsEl.innerHTML = html + footer;
+  }
+
+  qInput.addEventListener('input', render);
+  dirInputs.forEach(r => r.addEventListener('change', render));
+  transSearch.addEventListener('change', render);
+  render();
+})();
+</script>
+</body>
+</html>
