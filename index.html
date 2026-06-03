@@ -4,24 +4,33 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#fffce0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e0f2b" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TP Dict">
 <title>Toki Pona Dictionary</title>
 <style>
   :root {
-    --bg: #f7f5ee;
-    --fg: #1c1c1c;
-    --muted: #666;
-    --card: #fff;
-    --accent: #1e6f5c;
-    --border: #d9d4c0;
+    /* Light theme — icterine-yellow paper with ultramarine ink. */
+    --bg: #fffce0;
+    --fg: #14143a;
+    --muted: #6a6a55;
+    --card: #ffffff;
+    --accent: #111199;
+    --border: #e8e2a8;
+    --mark: rgba(255, 230, 80, 0.65);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #1c1d1a;
-      --fg: #ece8d8;
-      --muted: #999;
-      --card: #25261f;
-      --accent: #6fcca0;
-      --border: #3a3c33;
+      /* Dark theme — ultramarine night with icterine highlights. */
+      --bg: #0e0f2b;
+      --fg: #ede8c0;
+      --muted: #8a8a9c;
+      --card: #1a1b3a;
+      --accent: #FFFF77;
+      --border: #2a2b50;
+      --mark: rgba(255, 255, 119, 0.32);
     }
   }
   * { box-sizing: border-box; }
@@ -83,11 +92,8 @@
                           font-style: italic; margin-right: 4px; }
   .loading, .empty { padding: 30px 16px; text-align: center; color: var(--muted); }
   .source { font-size: 12px; color: var(--muted); margin-top: 20px; text-align: center; }
-  mark { background: rgba(255, 220, 60, 0.45); color: inherit; padding: 0 1px;
+  mark { background: var(--mark); color: inherit; padding: 0 1px;
          border-radius: 2px; }
-  @media (prefers-color-scheme: dark) {
-    mark { background: rgba(255, 200, 60, 0.32); }
-  }
 </style>
 </head>
 <body>
@@ -251,7 +257,23 @@
   dirInputs.forEach(r => r.addEventListener('change', render));
   transSearch.addEventListener('change', render);
   render();
+
+  // "/" focuses the search box (unless the user's already typing in an input).
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    e.preventDefault();
+    qInput.focus();
+    qInput.select();
+  });
 })();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
