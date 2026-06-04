@@ -261,14 +261,21 @@
   transSearch.addEventListener('change', render);
   render();
 
+  const focusSearch = () => { qInput.focus(); qInput.select(); };
+
   // "/" focuses the search box (unless the user's already typing in an input).
   document.addEventListener('keydown', (e) => {
     if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
     e.preventDefault();
-    qInput.focus();
-    qInput.select();
+    focusSearch();
+  });
+
+  // Re-grab focus whenever the page becomes visible/focused again.
+  window.addEventListener('focus', focusSearch);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') focusSearch();
   });
 })();
 
